@@ -1,0 +1,2353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flexnode Go! CMMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for audio effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a8a8a8;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+        /* Simple spinner */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        /* Profile picture */
+        .profile-pic {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e0e7ff; /* indigo-100 */
+            color: #3730a3; /* indigo-800 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.1rem;
+            object-fit: cover;
+        }
+        /* PIN dots */
+        .pin-dot {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background-color: #e5e7eb; /* gray-200 */
+            transition: background-color 0.2s ease;
+        }
+        .pin-dot.filled {
+            background-color: #3b82f6; /* blue-500 */
+        }
+        /* PIN keypad */
+        .keypad-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background-color: #f3f4f6; /* gray-100 */
+            color: #1f2937; /* gray-800 */
+            font-size: 1.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .keypad-btn:hover {
+            background-color: #e5e7eb; /* gray-200 */
+        }
+        .keypad-btn:active {
+            background-color: #d1d5db; /* gray-300 */
+        }
+        .keypad-btn.icon-btn {
+            background-color: transparent;
+        }
+        .keypad-btn.icon-btn:hover {
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        /* Video Intro */
+        #videoIntro {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 60;
+            background-color: #000;
+        }
+        #introVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #skipIntroBtn {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            z-index: 61;
+            padding: 10px 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid white;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #skipIntroBtn:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+         /* Shake animation for PIN error */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .animate-shake {
+            animation: shake 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex">
+
+    <!-- Video Intro -->
+    <div id="videoIntro" class="hidden">
+        <video id="introVideo" playsinline muted>
+            <!-- Source will be set by JS -->
+        </video>
+        <button id="skipIntroBtn">Skip Intro</button>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div class="spinner"></div>
+        <p id="loadingText" class="mt-4 text-lg font-medium text-gray-700">Loading CMMS...</p>
+        <p id="loadingErrorDetails" class="mt-2 text-sm text-red-500 max-w-lg text-center"></p>
+    </div>
+    
+    <!-- PIN Unlock Screen -->
+    <div id="pinUnlockScreen" class="fixed inset-0 bg-gray-100 z-40 hidden flex-col items-center justify-center p-4">
+        <div class="w-full max-w-xs mx-auto">
+            <div class="flex items-center justify-center space-x-2 mb-6">
+                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                <h1 class="text-3xl font-bold text-gray-800">Flexnode Go!</h1>
+            </div>
+            <p class="text-center text-lg text-gray-700 font-medium mb-2">Enter your PIN</p>
+            <p id="pinUserEmail" class="text-center text-gray-500 mb-4 truncate"></p>
+            
+            <!-- PIN Dots -->
+            <div id="pinDots" class="flex justify-center space-x-4 mb-6">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+            
+            <p id="pinError" class="text-center text-red-500 text-sm h-5 mb-4"></p>
+
+            <!-- Keypad -->
+            <div id="pinKeypad" class="grid grid-cols-3 gap-4">
+                <button class="keypad-btn" data-key="1">1</button>
+                <button class="keypad-btn" data-key="2">2</button>
+                <button class="keypad-btn" data-key="3">3</button>
+                <button class="keypad-btn" data-key="4">4</button>
+                <button class="keypad-btn" data-key="5">5</button>
+                <button class="keypad-btn" data-key="6">6</button>
+                <button class="keypad-btn" data-key="7">7</button>
+                <button class="keypad-btn" data-key="8">8</button>
+                <button class="keypad-btn" data-key="9">9</button>
+                <div class="w-70 h-70"></div> <!-- Placeholder -->
+                <button class="keypad-btn" data-key="0">0</button>
+                <button class="keypad-btn icon-btn flex items-center justify-center !text-gray-500" data-key="backspace">
+                    <svg class="w-8 h-8 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 002.828 0L19 12M3 12l6.414-6.414a2 2 0 012.828 0L19 12"></path></svg>
+                </button>
+            </div>
+
+            <p class="text-sm text-center text-gray-600 mt-8">
+                Not you?
+                <button id="fullLogoutBtn" class="font-medium text-blue-600 hover:text-blue-500">
+                    Sign out completely
+                </button>
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div id="contentArea" class="hidden flex-col flex-1 h-screen">
+        <!-- Sidebar -->
+        <div id="sidebar" class="w-64 bg-white border-r border-gray-200 p-5 hidden md:flex flex-col h-full">
+            <div class="flex items-center space-x-2 mb-8">
+                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                <h1 class="text-2xl font-bold text-gray-800">Flexnode Go!</h1>
+            </div>
+            <nav id="mainNav" class="flex flex-col space-y-2 flex-1">
+                <!-- Nav items will be injected by JS -->
+            </nav>
+            <div class="mt-auto">
+                <div id="userInfo" class="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div id="userAvatar" class="profile-pic"></div>
+                        <div class="flex-1 min-w-0">
+                            <span id="userEmailDisplay" class="font-medium block truncate text-gray-800"></span>
+                            <span id="userRoleDisplay" class="text-xs text-gray-500"></span>
+                        </div>
+                    </div>
+                </div>
+                <button id="lockAppButton" class="w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-200 flex items-center justify-center space-x-2 font-medium">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    <span>Lock App</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Header -->
+        <header class="md:hidden bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-gray-800">Flexnode Go!</h1>
+            <button id="mobileMenuBtn">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+            </button>
+        </header>
+
+        <!-- Mobile Menu (overlay) -->
+        <div id="mobileMenu" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden md:hidden">
+            <div class="w-64 bg-white p-5 h-full flex flex-col">
+                <div class="flex items-center justify-between mb-8">
+                    <h1 class="text-2xl font-bold text-gray-800">Menu</h1>
+                    <button id="closeMobileMenuBtn">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <nav id="mobileNav" class="flex flex-col space-y-2 flex-1">
+                    <!-- Mobile nav items injected by JS -->
+                </nav>
+                <div id="mobileUserInfo" class="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div id="mobileUserAvatar" class="profile-pic"></div>
+                        <div class="flex-1 min-w-0">
+                            <span id="mobileUserEmailDisplay" class="font-medium block truncate text-gray-800"></span>
+                            <span id="mobileUserRoleDisplay" class="text-xs text-gray-500"></span>
+                        </div>
+                    </div>
+                </div>
+                <button id="mobileLockAppButton" class="w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-200 flex items-center justify-center space-x-2 font-medium">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    <span>Lock App</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main View -->
+        <main id="mainView" class="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-100 h-screen">
+            <!-- Pages will be rendered here by JS -->
+        </main>
+    </div>
+
+    <!-- Login/Auth Page -->
+    <div id="authPage" class="w-full h-screen hidden items-center justify-center bg-gray-100">
+        <div class="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl">
+            <div class="flex items-center justify-center space-x-2 mb-6">
+                <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                <h1 class="text-3xl font-bold text-gray-800">Flexnode Go!</h1>
+            </div>
+            <h2 id="authTitle" class="text-2xl font-semibold text-center text-gray-700 mb-4">Welcome Back!</h2>
+            <p id="authSubtitle" class="text-center text-gray-500 mb-6">Please sign in to your account.</p>
+
+            <form id="authForm" class="space-y-4">
+                <div>
+                    <label for="authEmail" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <input type="email" id="authEmail" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="you@company.com">
+                </div>
+                <div>
+                    <label for="authPassword" class="block text-sm font-medium text-gray-700 mb-1">Password</slabel>
+                    <input type="password" id="authPassword" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="••••••••">
+                </div>
+                <div id="adminPasswordWrapper" class="hidden">
+                    <label for="adminPassword" class="block text-sm font-medium text-gray-700 mb-1">Admin Password</Mlabel>
+                    <input type="password" id="adminPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Admin setup password">
+                    <p class="text-xs text-gray-500 mt-1">The first user to sign up sets the Admin Password.</p>
+                </div>
+
+                <p id="authError" class="text-sm text-red-500"></p>
+
+                <button type="submit" id="authButton" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200">
+                    Sign In
+                </button>
+            </form>
+
+            <p class="text-sm text-center text-gray-600 mt-6">
+                <span id="authToggleText">Don't have an account?</span>
+                <button id="authToggleLink" class="font-medium text-blue-600 hover:text-blue-500">
+                    Sign Up
+                </button>
+            </p>
+        </div>
+    </div>
+
+    <!-- Modal Container -->
+    <div id="modalBackdrop" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden items-center justify-center p-4">
+        <div id="modalContent" class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-5 border-b border-gray-200">
+                <h3 id="modalTitle" class="text-xl font-semibold text-gray-800">Modal Title</h3>
+                <button id="modalCloseBtn" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <div id="modalBody" class="p-6 overflow-y-auto">
+                <!-- Modal body content injected by JS -->
+            </div>
+            <!-- Modal Footer -->
+            <div id="modalFooter" class="p-5 border-t border-gray-200 flex justify-end space-x-3">
+                <button id="modalCancelBtn" class="px-5 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition duration-200">Cancel</button>
+                <button id="modalConfirmBtn" class="px-5 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition duration-200">Confirm</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Admin Password Modal -->
+    <div id="adminPasswordModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Admin Access Required</h3>
+            <p class="text-sm text-gray-600 mb-4">Please enter the admin password to perform this action.</p>
+            <div class="space-y-2">
+                <label for="adminPassInput" class="block text-sm font-medium text-gray-700">Admin Password</label>
+                <input type="password" id="adminPassInput" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="••••••••">
+                <p id="adminPassError" class="text-sm text-red-500"></p>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="adminPassCancel" class="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition duration-200">Cancel</button>
+                <button id="adminPassConfirm" class="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition duration-200">Submit</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JavaScript -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { 
+            getAuth, 
+            onAuthStateChanged, 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword, 
+            signOut,
+            setPersistence,
+            browserLocalPersistence // Import this
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            addDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            collection, 
+            query,
+            writeBatch,
+            serverTimestamp
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import {
+            getStorage,
+            ref,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+        // --- 1. YOUR FIREBASE CONFIG IS NOW EMBEDDED ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBkz9OYY_wCopkwnPp_NWvMkUR-4AHUXcw",
+            authDomain: "cmms-eff66.firebaseapp.com",
+            projectId: "cmms-eff66",
+            storageBucket: "cmms-eff66.firebasestorage.app",
+            messagingSenderId: "55720793755",
+            appId: "1:55720793755:web:767126122fae21ee3a183e",
+            measurementId: "G-CLJGZBJF5H"
+        };
+        // -------------------------------------------
+
+        // --- Global State ---
+        const appState = {
+            isLoggedIn: false,
+            isLocked: true, // App starts locked
+            isAdmin: false,
+            currentUser: null,
+            currentUserData: {}, // For profile pic URL, etc.
+            adminPasswordHash: null,
+            currentPage: 'dashboard',
+            data: {
+                assets: [],
+                workOrders: [],
+                technicians: [],
+                sops: [],
+                users: {}, // To cache user profile data
+            },
+            listeners: [],
+            isFirstUser: false,
+            currentPin: "",
+            pinToCompare: null,
+            audioReady: false,
+            authTimeout: null,
+            authCompleted: false, // Flag to track if onAuthStateChanged has run
+        };
+
+        // --- Audio Synths ---
+        let clickSynth, successSynth, errorSynth;
+
+        function initAudio() {
+            if (appState.audioReady || typeof Tone === 'undefined') return;
+            
+            try {
+                // Create synths
+                clickSynth = new Tone.MembraneSynth().toDestination();
+                
+                successSynth = new Tone.PolySynth(Tone.Synth, {
+                    volume: -10,
+                    oscillator: { type: "triangle" },
+                    envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.2 }
+                }).toDestination();
+                
+                errorSynth = new Tone.AMSynth({
+                    volume: -5,
+                    harmonicity: 1.2,
+                    oscillator: { type: "fatsawtooth" },
+                    envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 },
+                    modulation: { type: "square" },
+                    modulationEnvelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }
+                }).toDestination();
+
+                appState.audioReady = true;
+                console.log("Audio initialized.");
+            } catch (e) {
+                console.error("Failed to initialize Tone.js synths:", e);
+            }
+        }
+
+        // Sound playing functions
+        function playClick() {
+            if (!appState.audioReady) return;
+            try { clickSynth.triggerAttackRelease("C1", "8n", Tone.now()); } catch(e) {}
+        }
+        function playSuccess() {
+            if (!appState.audioReady) return;
+            try { successSynth.triggerAttackRelease(["C4", "E4", "G4"], "16n", Tone.now()); } catch(e) {}
+        }
+        function playError() {
+            if (!appState.audioReady) return;
+            try { errorSynth.triggerAttackRelease("C2", "8n", Tone.now()); } catch(e) {}
+        }
+
+        // --- Firebase Initialization ---
+        let app, auth, db, storage;
+        let loadingOverlay, loadingText, loadingErrorDetails, contentArea, authPage, pinUnlockScreen, videoIntro;
+        let mainView, mainNav, mobileNav, userInfo, mobileUserInfo;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Get references to all main UI elements
+            loadingOverlay = document.getElementById("loadingOverlay");
+            loadingText = document.getElementById("loadingText");
+            loadingErrorDetails = document.getElementById("loadingErrorDetails");
+            contentArea = document.getElementById("contentArea");
+            authPage = document.getElementById("authPage");
+            pinUnlockScreen = document.getElementById("pinUnlockScreen");
+            videoIntro = document.getElementById("videoIntro");
+            mainView = document.getElementById("mainView");
+            mainNav = document.getElementById("mainNav");
+            mobileNav = document.getElementById("mobileNav");
+            userInfo = document.getElementById("userInfo");
+            mobileUserInfo = document.getElementById("mobileUserInfo");
+            
+            // Universal click listener to init audio
+            document.body.addEventListener('click', (e) => {
+                if (!appState.audioReady && typeof Tone !== 'undefined') {
+                    Tone.start();
+                    initAudio();
+                }
+                // Check if the click was on a button or link
+                if (e.target.closest('button, a')) {
+                    playClick();
+                }
+            }, true); // Use capture to ensure it runs early
+
+            try {
+                // Config is now hardcoded.
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                storage = getStorage(app); // Initialize Storage
+                
+                console.log("Firebase initialized.");
+                
+                // Try to show video intro
+                showVideoIntro();
+
+            } catch (error) {
+                console.error("Firebase initialization error:", error);
+                showLoadingError("Firebase Init Error", error.message);
+            }
+        });
+        
+        function showLoadingError(errorMsg, errorDetails = "") {
+            loadingText.textContent = errorMsg;
+            loadingErrorDetails.textContent = errorDetails;
+            loadingText.classList.add('text-red-500');
+            document.querySelector('#loadingOverlay .spinner').classList.add('hidden');
+        }
+        
+        async function showVideoIntro() {
+            try {
+                const videoRef = ref(storage, "intro.mp4");
+                const videoURL = await getDownloadURL(videoRef);
+                
+                const videoPlayer = document.getElementById("introVideo");
+                const skipIntroBtn = document.getElementById("skipIntroBtn");
+                
+                videoPlayer.src = videoURL;
+                videoIntro.classList.remove("hidden");
+                
+                const onVideoEnd = () => {
+                    videoIntro.classList.add("hidden");
+                    startAppInitialization(); // Start app auth etc.
+                };
+                
+                videoPlayer.play().catch(e => {
+                    // Autoplay failed, likely due to browser policy.
+                    console.warn("Video autoplay failed, user must interact or skip.");
+                    // We still need to show the skip button and let the user proceed.
+                });
+                
+                videoPlayer.onended = onVideoEnd;
+                skipIntroBtn.onclick = () => {
+                    playClick(); // Play click on skip
+                    videoPlayer.pause();
+                    onVideoEnd();
+                };
+                
+            } catch(error) {
+                console.warn("Could not find 'intro.mp4'. Skipping video intro.", error.code);
+                startAppInitialization(); // No video found, start app
+            }
+        }
+        
+        function startAppInitialization() {
+            console.log("Setting Firebase persistence...");
+            
+            // This is the fix for sandboxed environments like the preview panel
+            setPersistence(auth, browserLocalPersistence)
+                .then(() => {
+                    console.log("Firebase persistence set to local.");
+                    initializeAuthListener();
+                })
+                .catch((error) => {
+                    console.error("Error setting Firebase persistence:", error);
+                    // Even if persistence fails, try to initialize auth
+                    // This might be the path taken in very restrictive sandboxes
+                    initializeAuthListener();
+                });
+        }
+
+        // --- Authentication ---
+        function initializeAuthListener() {
+            if (!auth) return;
+            
+            console.log("Initializing Auth Listener...");
+            
+            // ** NEW: Auth Timeout **
+            // If onAuthStateChanged doesn't fire in 10s, assume it's blocked
+            // and show the login page.
+            appState.authTimeout = setTimeout(() => {
+                if (appState.authCompleted) return; // All good, it ran
+                
+                console.warn("Auth state check timed out (10s).");
+                console.warn("This is common in sandboxed environments (like this preview).");
+                console.warn("Forcing login page to display.");
+                
+                appState.isLoggedIn = false;
+                appState.isLocked = true;
+                
+                // Show auth page, hide everything else
+                contentArea.classList.add("hidden");
+                pinUnlockScreen.classList.add("hidden");
+                loadingOverlay.classList.add("hidden");
+                authPage.classList.remove("hidden");
+                authPage.classList.add("flex"); // Make sure it's visible
+                
+                showLoadingError("Auth Check Timed Out", "Please sign in to continue. This can happen in restrictive browser environments.");
+                // We don't hide the loading overlay, just show the error on it
+                // and also show the auth page *behind* it. Let's hide it.
+                loadingOverlay.classList.add("hidden");
+
+            }, 10000); // 10 second timeout
+
+            onAuthStateChanged(auth, async (user) => {
+                console.log("onAuthStateChanged fired.");
+                appState.authCompleted = true; // Mark as completed
+                clearTimeout(appState.authTimeout); // Clear the timeout
+                
+                if (user) {
+                    // User is signed in
+                    console.log("User is SIGNED IN:", user.uid);
+                    appState.currentUser = user;
+                    appState.isLoggedIn = true;
+
+                    // Fetch app config (admin password hash)
+                    const configRef = doc(db, "config", "main");
+                    const configSnap = await getDoc(configRef);
+
+                    if (!configSnap.exists()) {
+                        console.log("No config found. This is the first user.");
+                        appState.isFirstUser = true;
+                    } else {
+                        appState.isFirstUser = false;
+                        appState.adminPasswordHash = configSnap.data().adminPasswordHash;
+                        // Check if this user is an admin (e.g., in a roles doc)
+                        const userRolesRef = doc(db, "roles", user.uid);
+                        const userRolesSnap = await getDoc(userRolesRef);
+                        appState.isAdmin = userRolesSnap.exists() && userRolesSnap.data().isAdmin;
+                        console.log("User admin status:", appState.isAdmin);
+                    }
+                    
+                    // Fetch user's profile data (pic, etc.)
+                    await fetchCurrentUserData();
+
+                    // Check for a saved PIN
+                    const pinHash = getPINHash(user.uid);
+                    if (pinHash) {
+                        appState.pinToCompare = pinHash;
+                        appState.isLocked = true;
+                        showPinUnlockScreen();
+                    } else {
+                        // No PIN set, unlock app immediately
+                        playSuccess();
+                        appState.isLocked = false;
+                        initializeAppForUser();
+                    }
+
+                } else {
+                    // User is signed out
+                    console.log("User is SIGNED OUT.");
+                    appState.isLoggedIn = false;
+                    appState.isLocked = true;
+                    appState.currentUser = null;
+                    appState.isAdmin = false;
+                    appState.currentUserData = {};
+                    appState.currentPin = "";
+                    appState.pinToCompare = null;
+                    
+                    // Unsubscribe from all data listeners
+                    appState.listeners.forEach(unsubscribe => unsubscribe());
+                    appState.listeners = [];
+
+                    // Show auth page, hide everything else
+                    contentArea.classList.add("hidden");
+                    pinUnlockScreen.classList.add("hidden");
+                    loadingOverlay.classList.add("hidden");
+                    authPage.classList.remove("hidden");
+                    authPage.classList.add("flex"); // Make sure it's visible
+                    
+                    // Check if this is the first user setup
+                    try {
+                        const configRef = doc(db, "config", "main");
+                        const configSnap = await getDoc(configRef);
+                        appState.isFirstUser = !configSnap.exists();
+                    } catch (e) {
+                        console.error("Could not check for first user:", e);
+                        appState.isFirstUser = false; // Fail safe
+                    }
+                    toggleAuthMode(true); // Show login page by default
+                }
+            }, (error) => {
+                // This is the error callback for onAuthStateChanged
+                console.error("onAuthStateChanged ERROR:", error);
+                appState.authCompleted = true; // Mark as completed (with error)
+                clearTimeout(appState.authTimeout); // Clear the timeout
+                showLoadingError("Authentication Error", error.message);
+                
+                // Show auth page as a fallback
+                authPage.classList.remove("hidden");
+                authPage.classList.add("flex");
+                loadingOverlay.classList.add("hidden");
+            });
+        }
+        
+        async function fetchCurrentUserData() {
+            if (!appState.currentUser) return;
+            console.log("Fetching user data for:", appState.currentUser.uid);
+            const userDocRef = doc(db, "users", appState.currentUser.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+                appState.currentUserData = userDocSnap.data();
+                appState.data.users[appState.currentUser.uid] = appState.currentUserData;
+            } else {
+                // No profile doc yet, create a basic one
+                console.log("No user doc, creating one...");
+                appState.currentUserData = { email: appState.currentUser.email, profilePicUrl: null, initials: getInitials(appState.currentUser.email) };
+                try {
+                    await setDoc(userDocRef, appState.currentUserData, { merge: true });
+                } catch (e) {
+                    console.error("Failed to create user doc:", e);
+                }
+            }
+            console.log("Fetched user data:", appState.currentUserData);
+        }
+
+        async function initializeAppForUser() {
+            if (!appState.currentUser || appState.isLocked) return;
+            
+            console.log("Initializing app for user...");
+            setupNavigation();
+            setupDataListeners();
+            renderPage('dashboard');
+            
+            // Setup mobile menu listeners
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const mobileMenu = document.getElementById('mobileMenu');
+            const closeMobileMenuBtn = document.getElementById('closeMobileMenuBtn');
+            
+            mobileMenuBtn.onclick = () => mobileMenu.classList.remove('hidden');
+            closeMobileMenuBtn.onclick = () => mobileMenu.classList.add('hidden');
+            mobileMenu.onclick = (e) => {
+                if (e.target === mobileMenu) {
+                    mobileMenu.classList.add('hidden');
+                }
+            };
+            
+            // Setup lock buttons
+            document.getElementById('lockAppButton').onclick = lockApp;
+            document.getElementById('mobileLockAppButton').onclick = lockApp;
+
+            // Setup modal close buttons
+            document.getElementById('modalCloseBtn').onclick = closeModal;
+            document.getElementById('modalCancelBtn').onclick = closeModal;
+            document.getElementById('modalBackdrop').onclick = (e) => {
+                if (e.target === document.getElementById('modalBackdrop')) {
+                    closeModal();
+                }
+            };
+
+            // Setup admin pass modal
+            document.getElementById('adminPassCancel').onclick = closeAdminModal;
+            document.getElementById('adminPassConfirm').onclick = checkAdminPassword;
+            document.getElementById('adminPasswordModal').onclick = (e) => {
+                if (e.target === document.getElementById('adminPasswordModal')) {
+                    closeAdminModal();
+                }
+            };
+            
+            // Hide loading/auth/pin, show main app
+            authPage.classList.add("hidden");
+            authPage.classList.remove("flex");
+            pinUnlockScreen.classList.add("hidden");
+            pinUnlockScreen.classList.remove("flex");
+            loadingOverlay.classList.add("hidden");
+            contentArea.classList.remove("hidden");
+            contentArea.classList.add("flex"); // Use flex for layout
+        }
+
+        // --- Hashing Utility (for PIN and Admin Pass) ---
+        async function hashString(str) {
+            if (typeof str !== 'string' || str.length === 0) {
+                console.error("Invalid input to hashString");
+                return null;
+            }
+            try {
+                const buffer = new TextEncoder().encode(str);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                console.error("Hashing failed:", e);
+                return null;
+            }
+        }
+        
+        function getInitials(email) {
+            if (!email) return "?";
+            const parts = email.split('@')[0].split(/[._-]/);
+            if (parts.length > 1 && parts[0] && parts[1]) {
+                return (parts[0][0] + parts[1][0]).toUpperCase();
+            }
+            if (parts.length > 0 && parts[0] && parts[0].length > 1) {
+                return parts[0].substring(0, 2).toUpperCase();
+            }
+            if (email.length > 1) {
+                return email.substring(0, 2).toUpperCase();
+            }
+            return "?";
+        }
+        
+        function updateUserAvatar(user, userData) {
+            const avatar = document.getElementById('userAvatar');
+            const mobileAvatar = document.getElementById('mobileUserAvatar');
+            const emailDisplay = document.getElementById('userEmailDisplay');
+            const mobileEmailDisplay = document.getElementById('mobileUserEmailDisplay');
+            const roleDisplay = document.getElementById('userRoleDisplay');
+            const mobileRoleDisplay = document.getElementById('mobileUserRoleDisplay');
+
+            if (!avatar || !mobileAvatar) {
+                console.warn("Avatar elements not found, skipping update.");
+                return; // In case elements aren't rendered yet
+            }
+
+            const email = user.email;
+            const picUrl = userData?.profilePicUrl;
+            const initials = userData?.initials || getInitials(email);
+
+            if (picUrl) {
+                avatar.innerHTML = `<img src="${picUrl}" alt="Profile" class="profile-pic">`;
+                mobileAvatar.innerHTML = `<img src="${picUrl}" alt="Profile" class="profile-pic">`;
+            } else {
+                avatar.innerHTML = `<span>${initials}</span>`;
+                mobileAvatar.innerHTML = `<span>${initials}</span>`;
+            }
+            
+            emailDisplay.textContent = email;
+            emailDisplay.title = email;
+            mobileEmailDisplay.textContent = email;
+            mobileEmailDisplay.title = email;
+            
+            const role = appState.isAdmin ? 'Admin' : 'Technician';
+            roleDisplay.textContent = role;
+            mobileRoleDisplay.textContent = role;
+        }
+
+        // --- Auth UI Logic ---
+        const authForm = document.getElementById("authForm");
+        const authEmail = document.getElementById("authEmail");
+        const authPassword = document.getElementById("authPassword");
+        const authButton = document.getElementById("authButton");
+        const authToggleLink = document.getElementById("authToggleLink");
+        const authTitle = document.getElementById("authTitle");
+        const authSubtitle = document.getElementById("authSubtitle");
+        const authToggleText = document.getElementById("authToggleText");
+        const authError = document.getElementById("authError");
+        const adminPasswordWrapper = document.getElementById("adminPasswordWrapper");
+        const adminPasswordInput = document.getElementById("adminPassword");
+
+        let isLoginMode = true;
+
+        function toggleAuthMode(forceLogin = null) {
+            isLoginMode = (forceLogin !== null) ? forceLogin : !isLoginMode;
+            authError.textContent = "";
+            if (authForm) authForm.reset();
+
+            if (isLoginMode) {
+                // Switched to Login Mode
+                authTitle.textContent = "Welcome Back!";
+                authSubtitle.textContent = "Please sign in to your account.";
+                authButton.textContent = "Sign In";
+                authToggleText.textContent = "Don't have an account?";
+                authToggleLink.textContent = "Sign Up";
+                adminPasswordWrapper.classList.add("hidden");
+            } else {
+                // Switched to Sign Up Mode
+                authTitle.textContent = "Create an Account";
+                authSubtitle.textContent = "Get started with your new CMMS.";
+                authButton.textContent = "Sign Up";
+                authToggleText.textContent = "Already have an account?";
+                authToggleLink.textContent = "Sign In";
+                
+                // Show admin password field ONLY if this is the first user
+                if (appState.isFirstUser) {
+                    adminPasswordWrapper.classList.remove("hidden");
+                    if (adminPasswordInput) adminPasswordInput.required = true;
+                } else {
+                    adminPasswordWrapper.classList.add("hidden");
+                    if (adminPasswordInput) adminPasswordInput.required = false;
+                }
+            }
+        }
+
+        if (authToggleLink) {
+            authToggleLink.onclick = () => toggleAuthMode();
+        }
+
+        if (authForm) {
+            authForm.onsubmit = async (e) => {
+                e.preventDefault();
+                authButton.disabled = true;
+                authButton.textContent = "Processing...";
+                authError.textContent = "";
+
+                const email = authEmail.value;
+                const password = authPassword.value;
+
+                try {
+                    if (isLoginMode) {
+                        // --- Login Logic ---
+                        await signInWithEmailAndPassword(auth, email, password);
+                        // onAuthStateChanged will handle the rest (plays success sound)
+                    } else {
+                        // --- Sign Up Logic ---
+                        if (appState.isFirstUser) {
+                            // First user MUST set an admin password
+                            const adminPassword = adminPasswordInput.value;
+                            if (adminPassword.length < 6) {
+                                throw new Error("Admin password must be at least 6 characters.");
+                            }
+                            
+                            // 1. Create the user
+                            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                            const user = userCredential.user;
+                            
+                            // 2. Hash and save the admin password
+                            const adminPasswordHash = await hashString(adminPassword);
+                            if (!adminPasswordHash) throw new Error("Could not hash admin password.");
+                            
+                            const configRef = doc(db, "config", "main");
+                            await setDoc(configRef, { adminPasswordHash });
+                            
+                            // 3. Make this user an admin
+                            const userRolesRef = doc(db, "roles", user.uid);
+                            await setDoc(userRolesRef, { isAdmin: true });
+                            
+                            // 4. Create their user profile doc
+                            const userDocRef = doc(db, "users", user.uid);
+                            await setDoc(userDocRef, { email: user.email, profilePicUrl: null, initials: getInitials(user.email) });
+
+                            appState.adminPasswordHash = adminPasswordHash;
+                            appState.isAdmin = true; // First user is admin
+                            appState.isFirstUser = false; // No longer the first user
+                            
+                        } else {
+                            // Regular user sign up
+                            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                            const user = userCredential.user;
+                            
+                            // 2. Create their user profile doc
+                            const userDocRef = doc(db, "users", user.uid);
+                            await setDoc(userDocRef, { email: user.email, profilePicUrl: null, initials: getInitials(user.email) });
+                            
+                            // 3. (Optional) Create a default role (non-admin)
+                            const userRolesRef = doc(db, "roles", user.uid);
+                            await setDoc(userRolesRef, { isAdmin: false });
+                        }
+                        // onAuthStateChanged will handle the rest
+                    }
+                } catch (error) {
+                    console.error("Auth error:", error);
+                    authError.textContent = error.message;
+                    playError();
+                    authButton.disabled = false;
+                    toggleAuthMode(isLoginMode); // Reset form state
+                }
+            };
+        }
+
+        // --- PIN Unlock Logic ---
+        const pinKeypad = document.getElementById("pinKeypad");
+        const pinDotsContainer = document.getElementById("pinDots");
+        const pinError = document.getElementById("pinError");
+        const pinUserEmail = document.getElementById("pinUserEmail");
+        const fullLogoutBtn = document.getElementById("fullLogoutBtn");
+
+        function showPinUnlockScreen() {
+            console.log("Showing PIN unlock screen.");
+            appState.currentPin = "";
+            updatePinDots();
+            pinError.textContent = "";
+            pinUserEmail.textContent = appState.currentUser.email;
+            
+            authPage.classList.add("hidden");
+            authPage.classList.remove("flex");
+            contentArea.classList.add("hidden");
+            contentArea.classList.remove("flex");
+            loadingOverlay.classList.add("hidden");
+            pinUnlockScreen.classList.remove("hidden");
+            pinUnlockScreen.classList.add("flex"); // Use flex to center
+        }
+
+        if (pinKeypad) {
+            pinKeypad.onclick = (e) => {
+                const key = e.target.dataset.key;
+                if (!key) return;
+                
+                playClick(); // Play click sound
+                pinError.textContent = "";
+
+                if (key === "backspace") {
+                    appState.currentPin = appState.currentPin.slice(0, -1);
+                } else if (appState.currentPin.length < 4) {
+                    appState.currentPin += key;
+                }
+                
+                updatePinDots();
+
+                if (appState.currentPin.length === 4) {
+                    checkPIN();
+                }
+            };
+        }
+        
+        if (fullLogoutBtn) {
+            fullLogoutBtn.onclick = () => {
+                // Clear the PIN for this user on this device
+                if(appState.currentUser) {
+                    clearPIN(appState.currentUser.uid);
+                }
+                // Sign out fully
+                signOut(auth);
+            };
+        }
+
+        function updatePinDots() {
+            if (!pinDotsContainer) return;
+            const pinDots = pinDotsContainer.children;
+            for (let i = 0; i < pinDots.length; i++) {
+                if (i < appState.currentPin.length) {
+                    pinDots[i].classList.add("filled");
+                } else {
+                    pinDots[i].classList.remove("filled");
+                }
+            }
+        }
+
+        async function checkPIN() {
+            const pinHash = await hashString(appState.currentPin);
+            if (pinHash === appState.pinToCompare) {
+                // Success
+                console.log("PIN correct. Unlocking app.");
+                playSuccess();
+                appState.isLocked = false;
+                appState.currentPin = "";
+                initializeAppForUser(); // This will hide the PIN screen
+            } else {
+                // Failure
+                console.log("PIN incorrect.");
+                playError();
+                pinError.textContent = "Incorrect PIN. Try again.";
+                appState.currentPin = "";
+                // Add a shake animation for visual feedback
+                if (pinUnlockScreen) {
+                    pinUnlockScreen.classList.add('animate-shake');
+                    setTimeout(() => {
+                        pinUnlockScreen.classList.remove('animate-shake');
+                        updatePinDots();
+                    }, 500);
+                }
+            }
+        }
+        
+        function lockApp() {
+            if (!appState.pinToCompare) {
+                // User has no PIN set, prompt them to set one.
+                showModal("Set a PIN", "<p>You must set a 4-digit PIN to use the Lock feature.</p>", () => {
+                    closeModal();
+                    renderPage('myAccount');
+                }, "Go to My Account");
+                return;
+            }
+            
+            appState.isLocked = true;
+            appState.isAdmin = false; // De-elevate admin on lock
+            contentArea.classList.add("hidden");
+            contentArea.classList.remove("flex");
+            showPinUnlockScreen();
+        }
+
+        function getPINHash(uid) {
+            if (!uid) return null;
+            try {
+                return localStorage.getItem(`pin_${uid}`);
+            } catch (e) {
+                console.error("Could not read from localStorage:", e);
+                return null;
+            }
+        }
+        
+        async function setPIN(uid, pin) {
+            if (!uid || !pin || pin.length !== 4) {
+                throw new Error("Invalid PIN. Must be 4 digits.");
+            }
+            const pinHash = await hashString(pin);
+            if (!pinHash) throw new Error("Could not hash PIN.");
+            
+            try {
+                localStorage.setItem(`pin_${uid}`, pinHash);
+                appState.pinToCompare = pinHash;
+                console.log("PIN set and saved locally.");
+                playSuccess();
+            } catch (e) {
+                console.error("Could not save to localStorage:", e);
+                throw new Error("Could not save PIN. Storage might be full or disabled.");
+            }
+        }
+        
+        function clearPIN(uid) {
+            if (!uid) return;
+            try {
+                localStorage.removeItem(`pin_${uid}`);
+                appState.pinToCompare = null;
+                console.log("PIN cleared.");
+                playSuccess();
+            } catch (e) {
+                console.error("Could not remove from localStorage:", e);
+            }
+        }
+
+        // --- Admin Password Modal Logic ---
+        let adminActionCallback = null;
+        const adminPasswordModal = document.getElementById("adminPasswordModal");
+        const adminPassInput = document.getElementById("adminPassInput");
+        const adminPassError = document.getElementById("adminPassError");
+
+        function requestAdminPassword(callback) {
+            // If user is already admin, just run the callback
+            if (appState.isAdmin) {
+                console.log("Admin already elevated, running action.");
+                if (callback) callback(true);
+                return;
+            }
+            
+            // Otherwise, request password
+            adminActionCallback = callback;
+            adminPassInput.value = "";
+            adminPassError.textContent = "";
+            adminPasswordModal.classList.remove("hidden");
+            adminPasswordModal.classList.add("flex");
+            adminPassInput.focus();
+        }
+
+        function closeAdminModal() {
+            adminActionCallback = null;
+            adminPasswordModal.classList.add("hidden");
+            adminPasswordModal.classList.remove("flex");
+        }
+
+        async function checkAdminPassword() {
+            const password = adminPassInput.value;
+            if (!password) {
+                adminPassError.textContent = "Password cannot be empty.";
+                playError();
+                return;
+            }
+            
+            const passHash = await hashString(password);
+            
+            if (passHash === appState.adminPasswordHash) {
+                console.log("Admin access granted.");
+                playSuccess();
+                appState.isAdmin = true; // Elevate session to admin
+                closeAdminModal();
+                if (adminActionCallback) {
+                    adminActionCallback(true); // Run the protected action
+                }
+                // Update UI to show admin status
+                updateUserAvatar(appState.currentUser, appState.currentUserData);
+            } else {
+                console.log("Admin access denied.");
+                playError();
+                adminPassError.textContent = "Incorrect password.";
+                if (adminActionCallback) {
+                    adminActionCallback(false); // Signal failure
+                }
+            }
+        }
+        
+        // Wrapper for admin-protected functions
+        function withAdminAuth(func) {
+            return (...args) => {
+                requestAdminPassword((success) => {
+                    if (success) {
+                        func(...args);
+                    } else {
+                        console.log("Admin action cancelled.");
+                        // Optionally show a "permission denied" message
+                    }
+                });
+            };
+        }
+
+        // --- Data Listeners (Real-time Sync) ---
+        function setupDataListeners() {
+            if (appState.listeners.length > 0) {
+                appState.listeners.forEach(unsub => unsub());
+                appState.listeners = [];
+                console.log("Cleared old data listeners.");
+            }
+
+            const collectionsToSync = ['assets', 'workOrders', 'technicians', 'sops'];
+
+            collectionsToSync.forEach(collectionName => {
+                const q = query(collection(db, collectionName));
+                const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                    const data = [];
+                    querySnapshot.forEach((doc) => {
+                        data.push({ id: doc.id, ...doc.data() });
+                    });
+                    appState.data[collectionName] = data;
+                    console.log(`Synced ${collectionName}:`, data.length, "items");
+                    
+                    // After data syncs, re-render the current page to show new data
+                    if (!appState.isLocked && (appState.currentPage === collectionName || appState.currentPage === 'dashboard')) {
+                        renderPage(appState.currentPage);
+                    }
+                }, (error) => {
+                    console.error(`Error syncing ${collectionName}:`, error);
+                });
+                appState.listeners.push(unsubscribe);
+            });
+            
+            // Listener for user profile docs (to see technician names, etc.)
+            const usersQuery = query(collection(db, "users"));
+            const usersUnsubscribe = onSnapshot(usersQuery, (querySnapshot) => {
+                querySnapshot.forEach((doc) => {
+                    appState.data.users[doc.id] = doc.data();
+                });
+                console.log("Synced user profiles:", Object.keys(appState.data.users).length);
+                // Re-render if on a page that shows user info
+                if (!appState.isLocked && (appState.currentPage === 'workOrders' || appState.currentPage === 'technicians' || appState.currentPage === 'dashboard')) {
+                    renderPage(appState.currentPage);
+                }
+            }, (error) => {
+                console.error("Error syncing users:", error);
+            });
+            appState.listeners.push(usersUnsubscribe);
+            
+            // Single listener for current user's data for real-time avatar updates
+            if (appState.currentUser) {
+                const userDocRef = doc(db, "users", appState.currentUser.uid);
+                const userDocUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        appState.currentUserData = docSnap.data();
+                        appState.data.users[docSnap.id] = docSnap.data();
+                        if (!appState.isLocked) {
+                            updateUserAvatar(appState.currentUser, appState.currentUserData);
+                        }
+                    }
+                }, (error) => {
+                    console.error("Error on user doc snapshot:", error);
+                });
+                appState.listeners.push(userDocUnsubscribe);
+            }
+        }
+        
+        
+        // --- Navigation & Page Rendering ---
+        const navItems = [
+            { id: 'dashboard', text: 'Dashboard', icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6-4a1 1 0 001-1v-1a1 1 0 10-2 0v1a1 1 0 001 1zm5 0a1 1 0 001-1v-1a1 1 0 10-2 0v1a1 1 0 001 1z"></path></svg>' },
+            { id: 'workOrders', text: 'Work Orders', icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>' },
+            { id: 'assets', text: 'Assets', icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"></path></svg>' },
+            { id: 'technicians', text: 'Technicians', icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-2.37M16 13a4 4 0 100-8 4 4 0 000 8zM2 8v10a2 2 0 002 2h10a2 2 0 002-2V8a2 2 0 00-2-2H4a2 2 0 00-2 2z"></path></svg>' },
+            { id: 'sops', text: 'SOPs', icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>' },
+            { id: 'myAccount', text: 'My Account', icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>' },
+        ];
+
+        function setupNavigation() {
+            mainNav.innerHTML = '';
+            mobileNav.innerHTML = '';
+            
+            // Update User Info
+            updateUserAvatar(appState.currentUser, appState.currentUserData);
+
+            navItems.forEach(item => {
+                const navHtml = `
+                    <button data-page="${item.id}" class="nav-link w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition duration-200">
+                        ${item.icon}
+                        <span class="font-medium">${item.text}</span>
+                    </button>
+                `;
+                mainNav.innerHTML += navHtml;
+                mobileNav.innerHTML += navHtml;
+            });
+            
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.onclick = (e) => {
+                    const pageId = e.currentTarget.dataset.page;
+                    appState.currentPage = pageId;
+                    renderPage(pageId);
+                    
+                    // Close mobile menu on nav
+                    document.getElementById('mobileMenu').classList.add('hidden');
+                };
+            });
+            
+            updateActiveNav();
+        }
+        
+        function updateActiveNav() {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                if (link.dataset.page === appState.currentPage) {
+                    link.classList.add('bg-blue-50', 'text-blue-600');
+                } else {
+                    link.classList.remove('bg-blue-50', 'text-blue-600');
+                    link.classList.add('text-gray-600', 'hover:bg-gray-100', 'hover:text-gray-900');
+                }
+            });
+        }
+        
+        function renderPage(pageId) {
+            mainView.innerHTML = ''; // Clear previous content
+            appState.currentPage = pageId;
+            updateActiveNav();
+            
+            let renderFunction;
+            switch (pageId) {
+                case 'dashboard': renderFunction = renderDashboard; break;
+                case 'workOrders': renderFunction = () => renderListPage('Work Orders', 'workOrders', renderWorkOrderForm, workOrderColumns); break;
+                case 'assets': renderFunction = () => renderListPage('Assets', 'assets', renderAssetForm, assetColumns); break;
+                case 'technicians': renderFunction = () => renderListPage('Technicians', 'technicians', renderTechnicianForm, technicianColumns); break;
+                case 'sops': renderFunction = () => renderListPage('SOPs', 'sops', renderSopForm, sopColumns); break;
+                case 'myAccount': renderFunction = renderMyAccountPage; break;
+                default: renderFunction = renderDashboard; pageId = 'dashboard';
+            }
+            
+            try {
+                mainView.innerHTML = renderFunction();
+            } catch (e) {
+                console.error(`Failed to render page ${pageId}:`, e);
+                mainView.innerHTML = `<div class="text-red-500 p-4">Error rendering page. Check console for details.</div>`;
+            }
+            
+            // Add event listeners for the new page
+            if (pageId === 'myAccount') {
+                setupMyAccountListeners();
+            }
+            
+            document.getElementById('add-new-btn')?.addEventListener('click', () => {
+                const formRenderFunc = {
+                    'workOrders': renderWorkOrderForm,
+                    'assets': renderAssetForm,
+                    'technicians': renderTechnicianForm,
+                    'sops': renderSopForm
+                }[pageId];
+                
+                if (!formRenderFunc) return;
+                
+                if(pageId === 'technicians' || pageId === 'assets' || pageId === 'sops') {
+                    // These actions require admin auth
+                    withAdminAuth(formRenderFunc)();
+                } else {
+                    // Anyone can create a work order
+                    formRenderFunc();
+                }
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    const item = appState.data[pageId].find(i => i.id === id);
+                    const formRenderFunc = {
+                        'workOrders': renderWorkOrderForm,
+                        'assets': renderAssetForm,
+                        'technicians': renderTechnicianForm,
+                        'sops': renderSopForm
+                    }[pageId];
+                    
+                    if (!formRenderFunc || !item) return;
+
+                    if(pageId === 'technicians' || pageId === 'assets' || pageId === 'sops') {
+                        // These actions require admin auth
+                        withAdminAuth(() => formRenderFunc(item))();
+                    } else {
+                        // Anyone can edit a work order
+                        formRenderFunc(item);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    const item = appState.data[pageId].find(i => i.id === id);
+                    
+                    if (!item) return;
+
+                    const performDelete = async () => {
+                        showModal("Delete Item", 
+                            `<p>Are you sure you want to delete this item? This action cannot be undone.</p><p class="font-medium mt-2">${item?.name || item?.title || 'Item'}</p>`, 
+                            async () => {
+                                try {
+                                    // Special handling for assets: check for related WOs
+                                    if (pageId === 'assets') {
+                                        const relatedWOs = appState.data.workOrders.filter(wo => wo.assetId === id);
+                                        if (relatedWOs.length > 0) {
+                                            playError();
+                                            document.getElementById('modalBody').innerHTML += `<p class="text-red-500 mt-4">Cannot delete. This asset is linked to ${relatedWOs.length} work order(s).</p>`;
+                                            return;
+                                        }
+                                    }
+                                    // Special handling for technicians: check for related WOs
+                                    if (pageId === 'technicians') {
+                                        const relatedWOs = appState.data.workOrders.filter(wo => wo.assignedTo === id);
+                                        if (relatedWOs.length > 0) {
+                                            playError();
+                                            document.getElementById('modalBody').innerHTML += `<p class="text-red-500 mt-4">Cannot delete. This technician is assigned to ${relatedWOs.length} work order(s).</p>`;
+                                            return;
+                                        }
+                                    }
+                                    
+                                    await deleteDoc(doc(db, pageId, id));
+                                    console.log(`${pageId} item deleted: ${id}`);
+                                    playSuccess();
+                                    closeModal();
+                                    // Data will auto-update via listener
+                                } catch (error) {
+                                    console.error("Error deleting document: ", error);
+                                    playError();
+                                    document.getElementById('modalBody').innerHTML += `<p class="text-red-500 mt-4">${error.message}</p>`;
+                                }
+                            }, 
+                            "Delete"
+                        );
+                        document.getElementById('modalConfirmBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                        document.getElementById('modalConfirmBtn').classList.add('bg-red-600', 'hover:bg-red-700');
+                    };
+                    
+                    // All deletes require admin auth
+                    withAdminAuth(performDelete)();
+                });
+            });
+
+            // Setup search for list pages
+            if (['workOrders', 'assets', 'technicians', 'sops'].includes(pageId)) {
+                const searchFields = {
+                    'workOrders': ['title', 'assetName', 'assignedToName', 'status', 'priority'],
+                    'assets': ['name', 'location', 'model'],
+                    'technicians': ['name', 'email', 'specialty'],
+                    'sops': ['title']
+                }[pageId];
+                setupListSearch(pageId, searchFields);
+            }
+        }
+        
+        function setupListSearch(collectionName, searchFields) {
+            const searchInput = document.getElementById('list-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const listBody = document.getElementById('list-body');
+                    const noResults = document.getElementById('no-results-row');
+                    if (!listBody) return;
+                    
+                    const allRows = listBody.querySelectorAll('tr[data-id]');
+                    let visibleCount = 0;
+                    
+                    allRows.forEach(row => {
+                        const item = appState.data[collectionName].find(i => i.id === row.dataset.id);
+                        if (!item) {
+                            row.classList.add('hidden');
+                            return;
+                        }
+                        
+                        let isMatch = false;
+                        if (!searchTerm) {
+                            isMatch = true;
+                        } else {
+                            for (const field of searchFields) {
+                                let value = item[field];
+                                // Handle special cases like assignedToName
+                                if (field === 'assignedToName') {
+                                    value = (appState.data.users[item.assignedTo] || {}).name || (appState.data.technicians.find(t => t.id === item.assignedTo) || {}).name || 'Unassigned';
+                                }
+                                if (field === 'assetName') {
+                                    value = (appState.data.assets.find(a => a.id === item.assetId) || {}).name || 'N/A';
+                                }
+                                
+                                if (value && typeof value === 'string' && value.toLowerCase().includes(searchTerm)) {
+                                    isMatch = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (isMatch) {
+                            row.classList.remove('hidden');
+                            visibleCount++;
+                        } else {
+                            row.classList.add('hidden');
+                        }
+                    });
+                    
+                    if (noResults) {
+                        noResults.classList.toggle('hidden', visibleCount > 0);
+                    }
+                });
+            }
+        }
+        
+        // --- Dashboard Rendering ---
+        function renderDashboard() {
+            const openWOs = appState.data.workOrders.filter(wo => wo.status !== 'Completed').length;
+            const overdueWOs = appState.data.workOrders.filter(wo => wo.status !== 'Completed' && wo.dueDate && new Date(wo.dueDate + 'T00:00:00') < new Date()).length;
+            const totalAssets = appState.data.assets.length;
+            const totalTechs = appState.data.technicians.length;
+            
+            const recentWOs = [...appState.data.workOrders]
+                .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+                .slice(0, 5);
+                
+            const highPriorityWOs = appState.data.workOrders
+                .filter(wo => wo.status !== 'Completed' && wo.priority === 'High')
+                .sort((a, b) => (new Date(a.dueDate) || 0) - (new Date(b.dueDate) || 0))
+                .slice(0, 5);
+            
+            const userFirstName = (appState.currentUserData.name || appState.currentUser.email).split(' ')[0].split('@')[0];
+
+            return `
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">Dashboard</h2>
+                    <p class="text-gray-600">Welcome back, ${userFirstName}!</p>
+                </div>
+                
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Open Work Orders</p>
+                                <p class="text-4xl font-bold text-gray-800">${openWOs}</p>
+                            </div>
+                            <div class="w-12 h-12 flex items-center justify-center bg-blue-100 rounded-full">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Overdue Tasks</p>
+                                <p class="text-4xl font-bold ${overdueWOs > 0 ? 'text-red-600' : 'text-gray-800'}">${overdueWOs}</p>
+                            </div>
+                            <div class="w-12 h-12 flex items-center justify-center bg-red-100 rounded-full">
+                                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Total Assets</p>
+                                <p class="text-4xl font-bold text-gray-800">${totalAssets}</p>
+                            </div>
+                            <div class="w-12 h-12 flex items-center justify-center bg-green-100 rounded-full">
+                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Technicians</p>
+                                <p class="text-4xl font-bold text-gray-800">${totalTechs}</p>
+                            </div>
+                            <div class="w-12 h-12 flex items-center justify-center bg-indigo-100 rounded-full">
+                                <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-2.37M16 13a4 4 0 100-8 4 4 0 000 8zM2 8v10a2 2 0 002 2h10a2 2 0 002-2V8a2 2 0 00-2-2H4a2 2 0 00-2 2z"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Work Order Lists -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">High Priority Tasks</h3>
+                        <div class="space-y-4">
+                            ${highPriorityWOs.length > 0 ? highPriorityWOs.map(wo => `
+                                <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-semibold text-gray-800">${wo.title}</span>
+                                        <span class="text-xs font-medium px-2 py-0.5 rounded-full ${priorityPill(wo.priority)}">${wo.priority}</span>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-2">${(appState.data.assets.find(a => a.id === wo.assetId) || {}).name || 'N/A'}</p>
+                                    <div class="flex justify-between items-center text-sm">
+                                        <span class="text-gray-600">Due: ${formatDate(wo.dueDate)}</span>
+                                        <span class="text-gray-600">${(appState.data.users[wo.assignedTo] || {}).name || (appState.data.technicians.find(t => t.id === wo.assignedTo) || {}).name || 'Unassigned'}</span>
+                                    </div>
+                                </div>
+                            `).join('') : '<p class="text-gray-500">No high priority tasks. Good job!</p>'}
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Recent Work Orders</h3>
+                        <div class="space-y-4">
+                            ${recentWOs.length > 0 ? recentWOs.map(wo => `
+                                <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-semibold text-gray-800">${wo.title}</span>
+                                        <span class="text-xs font-medium px-2 py-0.5 rounded-full ${statusPill(wo.status)}">${wo.status}</span>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-2">${(appState.data.assets.find(a => a.id === wo.assetId) || {}).name || 'N/A'}</p>
+                                    <div class="flex justify-between items-center text-sm">
+                                        <span class="text-gray-600">Due: ${formatDate(wo.dueDate)}</span>
+                                        <span class="text-gray-600">${(appState.data.users[wo.assignedTo] || {}).name || (appState.data.technicians.find(t => t.id === wo.assignedTo) || {}).name || 'Unassigned'}</span>
+                                    </div>
+                                </div>
+                            `).join('') : '<p class="text-gray-500">No work orders created yet.</p>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- List & Form Page Rendering ---
+        
+        function renderListPage(title, collectionName, formRenderFunc, columns) {
+            const items = appState.data[collectionName];
+            
+            return `
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <h2 class="text-3xl font-bold text-gray-800">${title}</h2>
+                    <div class="flex w-full md:w-auto gap-4">
+                        <input type="text" id="list-search" placeholder="Search ${title}..." class="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <button id="add-new-btn" class="flex-shrink-0 bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 flex items-center space-x-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            <span>Add New</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    ${columns.map(col => `<th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${col.header}</th>`).join('')}
+                                    <th scope="col" class="relative px-6 py-3">
+                                        <span class="sr-only">Actions</span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="list-body" class="bg-white divide-y divide-gray-200">
+                                ${items.length > 0 ? items.map(item => `
+                                    <tr data-id="${item.id}" class="hover:bg-gray-50 transition duration-150">
+                                        ${columns.map(col => `<td class="px-6 py-4 whitespace-nowrap text-sm ${col.type === 'main' ? 'font-medium text-gray-900' : 'text-gray-600'}">${col.render(item)}</td>`).join('')}
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                            <button data-id="${item.id}" class="edit-btn text-blue-600 hover:text-blue-800">Edit</button>
+                                            <button data-id="${item.id}" class="delete-btn text-red-600 hover:text-red-800">Delete</button>
+                                        </td>
+                                    </tr>
+                                `).join('') : ''}
+                                <tr id="no-results-row" class="${items.length > 0 ? 'hidden' : ''}">
+                                    <td colspan="${columns.length + 1}" class="px-6 py-12 text-center text-gray-500">
+                                        No ${title.toLowerCase()} found.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Column Definitions ---
+        const workOrderColumns = [
+            { header: 'Work Order', type: 'main', render: (item) => item.title || 'Untitled' },
+            { header: 'Asset', type: 'sub', render: (item) => (appState.data.assets.find(a => a.id === item.assetId) || {}).name || '<span class="text-gray-400">N/A</span>' },
+            { header: 'Status', type: 'sub', render: (item) => `<span class="text-xs font-medium px-2.5 py-0.5 rounded-full ${statusPill(item.status)}">${item.status}</span>` },
+            { header: 'Priority', type: 'sub', render: (item) => `<span class="text-xs font-medium px-2.5 py-0.5 rounded-full ${priorityPill(item.priority)}">${item.priority}</span>` },
+            { header: 'Assigned To', type: 'sub', render: (item) => (appState.data.users[item.assignedTo] || {}).name || (appState.data.technicians.find(t => t.id === item.assignedTo) || {}).name || '<span class="text-gray-400">Unassigned</span>' },
+            { header: 'Due Date', type: 'sub', render: (item) => formatDate(item.dueDate) },
+        ];
+        
+        const assetColumns = [
+            { header: 'Name', type: 'main', render: (item) => item.name || 'Untitled' },
+            { header: 'Location', type: 'sub', render: (item) => item.location || 'N/A' },
+            { header: 'Model', type: 'sub', render: (item) => item.model || 'N/A' },
+            { header: 'Serial Number', type: 'sub', render: (item) => item.serial || 'N/A' },
+        ];
+        
+        const technicianColumns = [
+            { header: 'Name', type: 'main', render: (item) => item.name || 'Untitled' },
+            { header: 'Email', type: 'sub', render: (item) => item.email || 'N/A' },
+            { header: 'Specialty', type: 'sub', render: (item) => item.specialty || 'N/A' },
+            { header: 'Phone', type: 'sub', render: (item) => item.phone || 'N/A' },
+        ];
+        
+        const sopColumns = [
+            { header: 'Title', type: 'main', render: (item) => item.title || 'Untitled' },
+            { header: 'Est. Duration (min)', type: 'sub', render: (item) => item.duration || 'N/A' },
+        ];
+
+        // --- Form Rendering ---
+        
+        function renderAssetForm(item = null) {
+            const title = item ? "Edit Asset" : "Add New Asset";
+            showModal(title, `
+                <form id="modalForm" class="space-y-4">
+                    <input type="hidden" id="itemId" value="${item?.id || ''}">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700">Asset Name</label>
+                        <input type="text" id="name" value="${item?.name || ''}" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="location" class="block text-sm font-medium text-gray-700">Location</label>
+                        <input type="text" id="location" value="${item?.location || ''}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="model" class="block text-sm font-medium text-gray-700">Model</label>
+                        <input type="text" id="model" value="${item?.model || ''}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="serial" class="block text-sm font-medium text-gray-700">Serial Number</label>
+                        <input type="text" id="serial" value="${item?.serial || ''}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea id="description" rows="3" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">${item?.description || ''}</textarea>
+                    </div>
+                </form>
+            `, async () => {
+                const form = document.getElementById('modalForm');
+                if (!form.checkValidity()) {
+                    playError();
+                    form.reportValidity();
+                    return;
+                }
+                
+                const id = document.getElementById('itemId').value;
+                const data = {
+                    name: document.getElementById('name').value,
+                    location: document.getElementById('location').value,
+                    model: document.getElementById('model').value,
+                    serial: document.getElementById('serial').value,
+                    description: document.getElementById('description').value,
+                };
+                
+                await saveData('assets', data, id);
+            }, item ? "Save Changes" : "Create Asset");
+        }
+        
+        function renderTechnicianForm(item = null) {
+            const title = item ? "Edit Technician" : "Add New Technician";
+            showModal(title, `
+                <form id="modalForm" class="space-y-4">
+                    <input type="hidden" id="itemId" value="${item?.id || ''}">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                        <input type="text" id="name" value="${item?.name || ''}" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="email" value="${item?.email || ''}" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                        <input type="tel" id="phone" value="${item?.phone || ''}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="specialty" class="block text-sm font-medium text-gray-700">Specialty</label>
+                        <input type="text" id="specialty" value="${item?.specialty || ''}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., HVAC, Electrical">
+                    </div>
+                </form>
+            `, async () => {
+                const form = document.getElementById('modalForm');
+                if (!form.checkValidity()) {
+                    playError();
+                    form.reportValidity();
+                    return;
+                }
+                
+                const id = document.getElementById('itemId').value;
+                const data = {
+                    name: document.getElementById('name').value,
+                    email: document.getElementById('email').value,
+                    phone: document.getElementById('phone').value,
+                    specialty: document.getElementById('specialty').value,
+                };
+                
+                await saveData('technicians', data, id);
+            }, item ? "Save Changes" : "Create Technician");
+        }
+        
+        function renderSopForm(item = null) {
+            const title = item ? "Edit SOP" : "Add New SOP";
+            showModal(title, `
+                <form id="modalForm" class="space-y-4">
+                    <input type="hidden" id="itemId" value="${item?.id || ''}">
+                    <div>
+                        <label for="title" class="block text-sm font-medium text-gray-700">SOP Title</label>
+                        <input type="text" id="title" value="${item?.title || ''}" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="duration" class="block text-sm font-medium text-gray-700">Estimated Duration (minutes)</label>
+                        <input type="number" id="duration" value="${item?.duration || ''}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="steps" class="block text-sm font-medium text-gray-700">Steps</label>
+                        <textarea id="steps" rows="8" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Enter each step on a new line...">${item?.steps || ''}</textarea>
+                    </div>
+                </form>
+            `, async () => {
+                const form = document.getElementById('modalForm');
+                if (!form.checkValidity()) {
+                    playError();
+                    form.reportValidity();
+                    return;
+                }
+                
+                const id = document.getElementById('itemId').value;
+                const data = {
+                    title: document.getElementById('title').value,
+                    duration: document.getElementById('duration').value,
+                    steps: document.getElementById('steps').value, // Simple text for now
+                };
+                
+                await saveData('sops', data, id);
+            }, item ? "Save Changes" : "Create SOP");
+        }
+        
+        function renderWorkOrderForm(item = null) {
+            const title = item ? "Edit Work Order" : "Add New Work Order";
+            
+            const assetOptions = appState.data.assets.map(a => `<option value="${a.id}" ${item?.assetId === a.id ? 'selected' : ''}>${a.name} (${a.location || 'N/A'})</option>`).join('');
+            
+            // Combine technicians and registered users for assignment
+            const techData = appState.data.technicians;
+            const userData = Object.values(appState.data.users);
+            
+            const allAssignableUsers = [...techData];
+            userData.forEach(user => {
+                // Add user if they are not already listed in technicians (based on email)
+                if (user.email && !techData.some(t => t.email === user.email)) {
+                    // Use the Firestore doc ID (the user.uid) as the value
+                    allAssignableUsers.push({ id: appState.data.users[user.uid]?.id || Object.keys(appState.data.users).find(k => appState.data.users[k].email === user.email), name: user.name || user.email, email: user.email });
+                }
+            });
+            
+            // De-duplicate
+            const uniqueAssignable = Array.from(new Map(allAssignableUsers.map(u => [u.id, u])).values());
+            
+            const techOptions = uniqueAssignable.map(t => `<option value="${t.id}" ${item?.assignedTo === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
+            
+            const sopOptions = appState.data.sops.map(s => `<option value="${s.id}">${s.title}</option>`).join('');
+            
+            const statusOptions = ['Not Started', 'In Progress', 'On Hold', 'Completed'].map(s => `<option value="${s}" ${item?.status === s ? 'selected' : ''}>${s}</option>`).join('');
+            const priorityOptions = ['Low', 'Medium', 'High'].map(p => `<option value="${p}" ${item?.priority === p ? 'selected' : ''}>${p}</option>`).join('');
+
+            showModal(title, `
+                <form id="modalForm" class="space-y-4">
+                    <input type="hidden" id="itemId" value="${item?.id || ''}">
+                    <div>
+                        <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                        <input type="text" id="title" value="${item?.title || ''}" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="assetId" class="block text-sm font-medium text-gray-700">Asset</label>
+                            <select id="assetId" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select an asset...</option>
+                                ${assetOptions}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="assignedTo" class="block text-sm font-medium text-gray-700">Assign To</label>
+                            <select id="assignedTo" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select a user...</option>
+                                ${techOptions}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+                            <select id="status" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                ${statusOptions}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="priority" class="block text-sm font-medium text-gray-700">Priority</label>
+                            <select id="priority" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                ${priorityOptions}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="dueDate" class="block text-sm font-medium text-gray-700">Due Date</label>
+                        <input type="date" id="dueDate" value="${item?.dueDate || ''}" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="sop" class="block text-sm font-medium text-gray-700">Attach SOP</label>
+                        <div class="flex gap-2">
+                            <select id="sop" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select an SOP...</option>
+                                ${sopOptions}
+                            </select>
+                            <button type="button" id="applySopBtn" class="mt-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Apply</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700">Description / Steps</label>
+                        <textarea id="description" rows="6" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">${item?.description || ''}</textarea>
+                    </div>
+                </form>
+            `, async () => {
+                const form = document.getElementById('modalForm');
+                if (!form.checkValidity()) {
+                    playError();
+                    form.reportValidity();
+                    return;
+                }
+                
+                const id = document.getElementById('itemId').value;
+                const data = {
+                    title: document.getElementById('title').value,
+                    assetId: document.getElementById('assetId').value,
+                    assignedTo: document.getElementById('assignedTo').value,
+                    status: document.getElementById('status').value,
+                    priority: document.getElementById('priority').value,
+                    dueDate: document.getElementById('dueDate').value,
+                    description: document.getElementById('description').value,
+                };
+                
+                if (!id) {
+                    data.createdAt = serverTimestamp();
+                    data.createdBy = appState.currentUser.uid;
+                }
+                
+                await saveData('workOrders', data, id);
+            }, item ? "Save Changes" : "Create Work Order");
+            
+            // Add listener for the "Apply SOP" button
+            document.getElementById('applySopBtn').onclick = () => {
+                const sopId = document.getElementById('sop').value;
+                if (!sopId) return;
+                
+                const sop = appState.data.sops.find(s => s.id === sopId);
+                if (!sop) return;
+                
+                const descTextarea = document.getElementById('description');
+                const sopText = `--- SOP: ${sop.title} ---\n${sop.steps || 'No steps defined.'}\n---------------------\n\n`;
+                descTextarea.value = sopText + descTextarea.value;
+                playSuccess();
+            };
+        }
+        
+        // --- My Account Page ---
+        function renderMyAccountPage() {
+            return `
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">My Account</h2>
+                    <p class="text-gray-600">Manage your profile and security settings.</p>
+                </div>
+                
+                <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Profile Management Card -->
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-6">My Profile</h3>
+                        <div class="flex flex-col items-center mb-6">
+                            <div id="profilePicPreview" class="w-32 h-32 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center text-5xl font-semibold mb-4 overflow-hidden">
+                                <!-- JS will populate this -->
+                            </div>
+                            <input type="file" id="profilePicUpload" class="hidden" accept="image/png, image/jpeg">
+                            <button id="profilePicUploadBtn" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 mb-2">
+                                Upload New Picture
+                            </button>
+                            <button id="profilePicRemoveBtn" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-200 transition duration-200">
+                                Remove Picture
+                            </button>
+                            <p id="profilePicStatus" class="text-sm text-gray-500 mt-4 h-5"></p>
+                        </div>
+                        
+                        <form id="profileForm" class="space-y-4">
+                            <div>
+                                <label for="profileName" class="block text-sm font-medium text-gray-700">Display Name</label>
+                                <input type="text" id="profileName" value="${appState.currentUserData.name || ''}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., John Doe">
+                            </div>
+                            <div>
+                                <label for="profileEmail" class="block text-sm font-medium text-gray-700">Email</label>
+                                <input type="email" id="profileEmail" value="${appState.currentUser.email}" disabled class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed">
+                            </div>
+                            <button type="submit" id="saveProfileBtn" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200">
+                                Save Profile
+                            </button>
+                            <p id="profileStatus" class="text-sm text-gray-500 mt-2 h-5"></p>
+                        </form>
+                    </div>
+                    
+                    <!-- PIN Management Card -->
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-6">4-Digit PIN Lock</h3>
+                        <p class="text-gray-600 mb-4">Set a PIN for quick and secure access to the app on this device. The "Lock App" button will use this PIN.</p>
+                        
+                        <form id="pinForm" class="space-y-4">
+                            <div>
+                                <label for="currentPin" class="block text-sm font-medium text-gray-700">Current PIN (if set)</label>
+                                <input type="password" id="currentPin" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="••••">
+                            </div>
+                            <div>
+                                <label for="newPin" class="block text-sm font-medium text-gray-700">New PIN</label>
+                                <input type="password" id="newPin" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="••••">
+                            </div>
+                            <div>
+                                <label for="confirmPin" class="block text-sm font-medium text-gray-700">Confirm New PIN</label>
+                                <input type="password" id="confirmPin" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="••••">
+                            </div>
+                            <button type="submit" id="setPinBtn" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-200">
+                                ${appState.pinToCompare ? 'Update PIN' : 'Set PIN'}
+                            </button>
+                            <button type="button" id="removePinBtn" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-200 transition duration-200 ${!appState.pinToCompare ? 'hidden' : ''}">
+                                Remove PIN from this Device
+                            </button>
+                        </form>
+                        <p id="pinStatus" class="text-sm mt-4 h-5"></p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function setupMyAccountListeners() {
+            // --- Profile Pic Logic ---
+            const preview = document.getElementById('profilePicPreview');
+            const uploadInput = document.getElementById('profilePicUpload');
+            const uploadBtn = document.getElementById('profilePicUploadBtn');
+            const removeBtn = document.getElementById('profilePicRemoveBtn');
+            const statusMsg = document.getElementById('profilePicStatus');
+            
+            // Set initial preview
+            if (appState.currentUserData.profilePicUrl) {
+                preview.innerHTML = `<img src="${appState.currentUserData.profilePicUrl}" alt="Profile" class="w-full h-full object-cover">`;
+            } else {
+                preview.innerHTML = `<span>${appState.currentUserData.initials || getInitials(appState.currentUser.email)}</span>`;
+            }
+            
+            uploadBtn.onclick = () => uploadInput.click();
+            
+            uploadInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (file.size > 2 * 1024 * 1024) { // 2MB limit
+                    statusMsg.textContent = "Error: File is too large (max 2MB).";
+                    statusMsg.classList.add('text-red-500');
+                    playError();
+                    return;
+                }
+                
+                statusMsg.textContent = "Uploading...";
+                statusMsg.classList.remove('text-red-500', 'text-green-500');
+                uploadBtn.disabled = true;
+                
+                try {
+                    const userId = appState.currentUser.uid;
+                    // Delete old file if it exists
+                    if (appState.currentUserData.profilePicPath) {
+                        try {
+                            const oldFileRef = ref(storage, appState.currentUserData.profilePicPath);
+                            await deleteObject(oldFileRef);
+                        } catch (delError) {
+                            console.warn("Could not delete old profile pic, maybe it's already gone?", delError);
+                        }
+                    }
+                    
+                    const filePath = `profilePictures/${userId}/${Date.now()}_${file.name}`;
+                    const fileRef = ref(storage, filePath);
+                    
+                    // Upload file
+                    const snapshot = await uploadBytes(fileRef, file);
+                    
+                    // Get download URL
+                    const downloadURL = await getDownloadURL(snapshot.ref);
+                    
+                    // Update user's doc in Firestore
+                    const userDocRef = doc(db, "users", userId);
+                    await updateDoc(userDocRef, {
+                        profilePicUrl: downloadURL,
+                        profilePicPath: filePath // Save path to delete old one later
+                    });
+                    
+                    statusMsg.textContent = "Profile picture updated!";
+                    statusMsg.classList.add('text-green-500');
+                    playSuccess();
+                    
+                } catch (error) {
+                    console.error("Error uploading profile picture:", error);
+                    statusMsg.textContent = "Error uploading. Try again.";
+                    statusMsg.classList.add('text-red-500');
+                    playError();
+                } finally {
+                    uploadBtn.disabled = false;
+                    uploadInput.value = null; // Clear input
+                }
+            };
+            
+            removeBtn.onclick = async () => {
+                if (!appState.currentUserData.profilePicUrl) {
+                    statusMsg.textContent = "No profile picture to remove.";
+                    return;
+                }
+                
+                statusMsg.textContent = "Removing...";
+                removeBtn.disabled = true;
+                
+                try {
+                    // 1. Delete file from Storage
+                    if (appState.currentUserData.profilePicPath) {
+                        const fileRef = ref(storage, appState.currentUserData.profilePicPath);
+                        await deleteObject(fileRef);
+                    }
+                    
+                    // 2. Update Firestore doc
+                    const userId = appState.currentUser.uid;
+                    const userDocRef = doc(db, "users", userId);
+                    await updateDoc(userDocRef, {
+                        profilePicUrl: null,
+                        profilePicPath: null
+                    });
+                    
+                    statusMsg.textContent = "Profile picture removed.";
+                    playSuccess();
+                    
+                } catch (error) {
+                    console.error("Error removing profile picture:", error);
+                    statusMsg.textContent = "Error removing picture. Try again.";
+                    statusMsg.classList.add('text-red-500');
+                    playError();
+                } finally {
+                    removeBtn.disabled = false;
+                }
+            };
+
+            // --- Profile Form Logic ---
+            const profileForm = document.getElementById('profileForm');
+            const profileNameInput = document.getElementById('profileName');
+            const profileStatus = document.getElementById('profileStatus');
+            
+            profileForm.onsubmit = async (e) => {
+                e.preventDefault();
+                profileStatus.textContent = "Saving...";
+                profileStatus.classList.remove('text-red-500', 'text-green-500');
+                
+                const newName = profileNameInput.value;
+                const newInitials = getInitials(newName || appState.currentUser.email);
+                
+                try {
+                    const userId = appState.currentUser.uid;
+                    const userDocRef = doc(db, "users", userId);
+                    await updateDoc(userDocRef, {
+                        name: newName,
+                        initials: newInitials
+                    });
+                    
+                    profileStatus.textContent = "Profile saved!";
+                    profileStatus.classList.add('text-green-500');
+                    playSuccess();
+                } catch (error) {
+                    profileStatus.textContent = "Error saving profile.";
+                    profileStatus.classList.add('text-red-500');
+                    playError();
+                }
+            };
+
+            // --- PIN Form Logic ---
+            const pinForm = document.getElementById('pinForm');
+            const currentPinInput = document.getElementById('currentPin');
+            const newPinInput = document.getElementById('newPin');
+            const confirmPinInput = document.getElementById('confirmPin');
+            const setPinBtn = document.getElementById('setPinBtn');
+            const removePinBtn = document.getElementById('removePinBtn');
+            const pinStatus = document.getElementById('pinStatus');
+            
+            pinForm.onsubmit = async (e) => {
+                e.preventDefault();
+                pinStatus.textContent = "";
+                pinStatus.classList.remove('text-red-500', 'text-green-500');
+                
+                const currentPin = currentPinInput.value;
+                const newPin = newPinInput.value;
+                const confirmPin = confirmPinInput.value;
+                
+                // 1. Check if new PINs match
+                if (newPin !== confirmPin) {
+                    pinStatus.textContent = "New PINs do not match.";
+                    pinStatus.classList.add('text-red-500');
+                    playError();
+                    return;
+                }
+                
+                // 2. Check if new PIN is 4 digits
+                if (newPin.length !== 4) {
+                    pinStatus.textContent = "New PIN must be 4 digits.";
+                    pinStatus.classList.add('text-red-500');
+                    playError();
+                    return;
+                }
+                
+                // 3. Check current PIN if one is set
+                if (appState.pinToCompare) {
+                    const currentPinHash = await hashString(currentPin);
+                    if (currentPinHash !== appState.pinToCompare) {
+                        pinStatus.textContent = "Current PIN is incorrect.";
+                        pinStatus.classList.add('text-red-500');
+                        playError();
+                        return;
+                    }
+                }
+                
+                // 4. All checks passed, set the new PIN
+                try {
+                    await setPIN(appState.currentUser.uid, newPin);
+                    pinStatus.textContent = "PIN updated successfully!";
+                    pinStatus.classList.add('text-green-500');
+                    pinForm.reset();
+                    setPinBtn.textContent = "Update PIN";
+                    removePinBtn.classList.remove('hidden');
+                } catch (error) {
+                    pinStatus.textContent = `Error: ${error.message}`;
+                    pinStatus.classList.add('text-red-500');
+                    playError();
+                }
+            };
+            
+            removePinBtn.onclick = () => {
+                showModal("Remove PIN?", 
+                    "<p>Are you sure you want to remove the PIN from this device? The 'Lock App' button will no longer function until a new PIN is set.</p>", 
+                    () => {
+                        clearPIN(appState.currentUser.uid);
+                        pinStatus.textContent = "PIN has been removed from this device.";
+                        pinStatus.classList.add('text-green-500');
+                        setPinBtn.textContent = "Set PIN";
+                        removePinBtn.classList.add('hidden');
+                        pinForm.reset();
+                        closeModal();
+                        playSuccess();
+                    }, 
+                    "Remove PIN"
+                );
+                document.getElementById('modalConfirmBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                document.getElementById('modalConfirmBtn').classList.add('bg-red-600', 'hover:bg-red-700');
+            };
+        }
+
+        // --- Data Save/Update ---
+        async function saveData(collectionName, data, id = null) {
+            try {
+                const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+                modalConfirmBtn.disabled = true;
+                modalConfirmBtn.textContent = "Saving...";
+                
+                if (id) {
+                    // Update existing doc
+                    const docRef = doc(db, collectionName, id);
+                    await updateDoc(docRef, data);
+                    console.log("Document updated:", id);
+                } else {
+                    // Add new doc
+                    const docRef = await addDoc(collection(db, collectionName), data);
+                    console.log("Document added:", docRef.id);
+                }
+                
+                modalConfirmBtn.disabled = false;
+                playSuccess();
+                closeModal();
+                // Data will re-sync via listener, no manual re-render needed
+            } catch (error) {
+                console.error("Error saving data: ", error);
+                playError();
+                document.getElementById('modalBody').innerHTML += `<p class="text-red-500 mt-4">${error.message}</p>`;
+                modalConfirmBtn.disabled = false;
+                modalConfirmBtn.textContent = id ? "Save Changes" : "Create";
+            }
+        }
+        
+        // --- Modal ---
+        const modalBackdrop = document.getElementById('modalBackdrop');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+        
+        function showModal(title, bodyHtml, onConfirm, confirmText = "Save") {
+            modalTitle.textContent = title;
+            modalBody.innerHTML = bodyHtml;
+            
+            const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+            
+            // Reset confirm button style and state
+            modalConfirmBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+            modalConfirmBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            modalConfirmBtn.textContent = confirmText;
+            modalConfirmBtn.disabled = false;
+            
+            // Re-assign click handler
+            modalConfirmBtn.onclick = () => onConfirm(); 
+            
+            modalBackdrop.classList.remove('hidden');
+            modalBackdrop.classList.add('flex');
+        }
+        
+        function closeModal() {
+            modalBackdrop.classList.add('hidden');
+            modalBackdrop.classList.remove('flex');
+            modalBody.innerHTML = '';
+            // Remove click handler to prevent duplicates
+            document.getElementById('modalConfirmBtn').onclick = null; 
+        }
+
+        // --- Helpers ---
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                // Assuming dateString is 'YYYY-MM-DD'
+                const date = new Date(dateString + 'T00:00:00'); // Use T00:00:00 to avoid timezone issues
+                return date.toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC' // Interpret the date as UTC
+                });
+            } catch (e) {
+                return dateString;
+            }
+        }
+        
+        function statusPill(status) {
+            switch (status) {
+                case 'Not Started': return 'bg-gray-200 text-gray-800';
+                case 'In Progress': return 'bg-blue-100 text-blue-800';
+                case 'On Hold': return 'bg-yellow-100 text-yellow-800';
+                case 'Completed': return 'bg-green-100 text-green-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        function priorityPill(priority) {
+            switch (priority) {
+                case 'Low': return 'bg-green-100 text-green-800';
+                case 'Medium': return 'bg-yellow-100 text-yellow-800';
+                case 'High': return 'bg-red-100 text-red-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+    </script>
+</body>
+</html>
+
